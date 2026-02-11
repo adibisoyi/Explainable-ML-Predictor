@@ -1,0 +1,8 @@
+version: "3.9"
+services:
+  exml-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      EXML_API_KEYS: '{"dev-admin-key":{"role":"admin","key_id":"compose-admin"},"dev-predict-key":{"role":"predictor","key_id":"compose-predictor"}}'

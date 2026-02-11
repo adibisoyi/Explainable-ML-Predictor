@@ -45,11 +45,24 @@ def train_and_save(
     joblib.dump(pipeline, out_path / MODEL_FILENAME)
     joblib.dump(X_train.head(200), out_path / BACKGROUND_FILENAME)
 
+    feature_baseline = {
+        feature: {
+            "mean": float(X_train[feature].mean()),
+            "std": float(X_train[feature].std() or 0.0),
+        }
+        for feature in feature_names
+    }
+
     metadata = {
         "model_name": model_name,
         "feature_names": feature_names,
         "target_name": dataset.target_name,
         "metrics": metrics,
+        "feature_baseline": feature_baseline,
+        "baseline_class_balance": {
+            "negative": float((y_train == 0).mean()),
+            "positive": float((y_train == 1).mean()),
+        },
     }
     (out_path / METADATA_FILENAME).write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
