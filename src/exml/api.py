@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import joblib
@@ -29,6 +30,10 @@ def create_app(artifact_dir: Path | str = DEFAULT_ARTIFACT_DIR) -> FastAPI:
 
     @app.on_event("startup")
     def _load_artifacts() -> None:
+    artifacts = Path(artifact_dir)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
         try:
             app.state.pipeline = joblib.load(artifacts / MODEL_FILENAME)
             app.state.background = joblib.load(artifacts / BACKGROUND_FILENAME)
@@ -36,6 +41,14 @@ def create_app(artifact_dir: Path | str = DEFAULT_ARTIFACT_DIR) -> FastAPI:
             app.state.load_error = None
         except Exception as exc:  # noqa: BLE001
             app.state.load_error = str(exc)
+        yield
+
+    app = FastAPI(title="Explainable ML Predictor", version="0.1.0", lifespan=lifespan)
+
+    app.state.pipeline = None
+    app.state.metadata = None
+    app.state.background = None
+    app.state.load_error = None
 
     def _ensure_model_loaded() -> None:
         if app.state.pipeline is None or app.state.metadata is None or app.state.background is None:
