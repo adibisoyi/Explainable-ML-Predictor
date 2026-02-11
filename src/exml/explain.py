@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypedDict
 
 import numpy as np
 import pandas as pd
@@ -8,11 +9,17 @@ import shap
 from sklearn.pipeline import Pipeline
 
 
+class Contribution(TypedDict):
+    feature: str
+    value: float
+    contribution: float
+
+
 @dataclass
 class PredictionExplanation:
     base_value: float
     predicted_probability: float
-    contributions: list[dict]
+    contributions: list[Contribution]
 
 
 def _binary_shap_values(raw_shap_values) -> np.ndarray:
@@ -52,11 +59,12 @@ def explain_single(
     base_value = float(np.array(expected).reshape(-1)[-1])
     predicted_probability = float(pipeline.predict_proba(input_df)[0, 1])
 
-    items = []
+    items: list[Contribution] = []
     for feature_name, feature_value, contribution in zip(
         input_df.columns,
         input_df.iloc[0].values,
         contributions_vector,
+        strict=True,
     ):
         items.append(
             {

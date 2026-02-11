@@ -1,12 +1,21 @@
 # Explainable ML Predictor
 
-A minimal end-to-end machine learning project that trains a tabular classifier, serves predictions with FastAPI, and explains individual predictions using SHAP.
+A production-minded end-to-end machine learning project that trains a tabular classifier, serves predictions with FastAPI, and explains individual predictions using SHAP.
 
 ## WHY this project exists
 
 - Show the full ML lifecycle in a small codebase: train -> save artifacts -> serve -> explain.
 - Demonstrate explainability in a practical API (`/explain`) rather than theory-only notebooks.
-- Provide a clean baseline you can extend to your own CSV data later.
+- Provide a clean baseline that already includes production launch guardrails.
+
+## Production-ready additions in this branch
+
+- API key authentication + role-based authorization (`predictor` and `admin`).
+- Structured JSON logs with request tracing (`x-request-id` propagation).
+- Online feature-drift monitor and `/monitoring/drift` status endpoint.
+- CI quality gates for linting, typing, tests, and security scans.
+- Reproducible deployment assets (`Dockerfile`, `docker-compose`, `infra/k8s`).
+- Load-test scaffold and SLO definitions in `docs/SLO.md`.
 
 ## Quick install
 
@@ -20,13 +29,12 @@ pip install -e .[dev]
 
 ```bash
 python -m exml.cli train --model logistic --out artifacts/
-python -m exml.cli train --model rf --out artifacts/
 ```
 
-Training prints validation metrics (accuracy + ROC-AUC) and saves:
+Training prints validation metrics and saves:
 
 - `artifacts/pipeline.joblib`
-- `artifacts/metadata.json`
+- `artifacts/metadata.json` (includes baseline feature stats for drift checks)
 - `artifacts/background.joblib`
 
 ## Run the API
@@ -35,11 +43,19 @@ Training prints validation metrics (accuracy + ROC-AUC) and saves:
 python -m exml.cli serve
 ```
 
+Default local keys:
+
+- predictor key: `dev-predict-key`
+- admin key: `dev-admin-key`
+
+> Override keys with `EXML_API_KEYS` JSON env var. In production, set `EXML_ENV=prod` to disable built-in dev keys and require explicit key configuration.
+
 Endpoints:
 
-- `GET /health`
-- `POST /predict`
-- `POST /explain`
+- `GET /health` (public)
+- `POST /predict` (`predictor` or `admin`)
+- `POST /explain` (`admin`)
+- `GET /monitoring/drift` (`admin`)
 
 ## Build a valid payload quickly
 
@@ -56,59 +72,46 @@ curl -s http://127.0.0.1:8000/health
 ```bash
 curl -s -X POST http://127.0.0.1:8000/predict \
   -H 'Content-Type: application/json' \
+  -H 'x-api-key: dev-predict-key' \
+  -H 'x-request-id: demo-123' \
   -d @sample.json
 ```
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/explain \
-  -H 'Content-Type: application/json' \
-  -d @sample.json
+curl -s http://127.0.0.1:8000/monitoring/drift \
+  -H 'x-api-key: dev-admin-key'
 ```
 
-## Example responses
+## CI quality gates (GitHub Actions)
 
-`/predict`
+Workflow: `.github/workflows/ci.yml`
 
-```json
-{
-  "predicted_class": 0,
-  "predicted_probability": 0.9996
-}
-```
+- `ruff check src tests`
+- `mypy src`
+- `pytest -q`
+- `bandit -r src`
+- `pip-audit`
 
-`/explain` (truncated)
+## Reproducible deployment
 
-```json
-{
-  "base_value": 0.36,
-  "predicted_probability": 0.9996,
-  "top_contributions": [
-    {"feature": "worst perimeter", "value": 184.6, "contribution": 1.12},
-    {"feature": "mean concave points", "value": 0.1471, "contribution": 0.79}
-  ]
-}
-```
-
-## CLI commands
+### Docker
 
 ```bash
-python -m exml.cli train --model logistic --out artifacts/
-python -m exml.cli serve
-python -m exml.cli sample-json
-python -m exml.cli predict --json '{"mean radius": 17.99, ...}'
-python -m exml.cli explain --json '{"mean radius": 17.99, ...}'
+docker build -t exml-api .
+docker run --rm -p 8000:8000 exml-api
 ```
 
-## Train from CSV (basic extension)
-
-Your CSV must contain a target column (default name: `target`) and numeric feature columns.
+### Docker Compose
 
 ```bash
-python -m exml.cli train --model logistic --csv your_data.csv --target target --out artifacts/
+docker compose up --build
 ```
 
-## How this helps in real-world ML
+### Kubernetes manifests
 
-- Lets teams inspect *why* a prediction happened, not only *what* happened.
-- Makes model behavior easier to debug when performance drifts.
-- Provides an API contract (schemas + metadata) that is production-friendly from day one.
+- `infra/k8s/deployment.yaml`
+- `infra/k8s/secret.example.yaml`
+
+## Performance & SLOs
+
+See `docs/SLO.md` for explicit objectives and load-test execution.

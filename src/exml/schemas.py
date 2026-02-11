@@ -58,3 +58,18 @@ class ExplainResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
+
+
+class DriftAlert(BaseModel):
+    feature: str
+    baseline_mean: float
+    current_mean: float
+    z_score: float
+
+
+class DriftStatusResponse(BaseModel):
+    status: str
+    window_size: int
+    alerts: list[DriftAlert]
+    z_threshold: float | None = None
+    tracked_features: int | None = None
